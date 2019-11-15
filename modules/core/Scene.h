@@ -2,6 +2,7 @@
 
 #include "ILight.h"
 #include "IPrim.h"
+#include "xxx.h"
 #include "CameraPerspective.h"
 #include "BSPTree.h"
 
@@ -39,7 +40,13 @@ namespace rt {
 		 * @brief Adds a new primitive to the scene
 		 * @param prim Pointer to the primitive
 		 */
-		DllExport void add(const std::shared_ptr<IPrim> pPrim) { m_vpPrims.push_back(pPrim); }
+		DllExport void add(const ptr_prim_t pPrim) { m_vpPrims.push_back(pPrim); }
+
+		DllExport void add(const std::shared_ptr<CXXX> pXXX) {
+			for (auto& pPrim : pXXX->getPrims())
+				m_vpPrims.push_back(pPrim);
+		}
+
 		/**
 		 * @brief Adds a new light to the scene
 		 * @param pLight Pointer to the light
@@ -67,7 +74,7 @@ namespace rt {
 		 * @brief Returns the container with all scene light objects
 		 * @return The vector with pointers to the scene lights
 		*/
-		const std::vector<std::shared_ptr<ILight>> getLights(void) const { return m_vpLights; }
+		const std::vector<std::shared_ptr<ILight>>& getLights(void) const { return m_vpLights; }
 		/**
 		 * @brief Build the BSP tree for the current scene
 		 * @details This function takes into accound all the primitives in scene and builds the BSP tree with the root node in \b m_pBSPTree variable
@@ -144,7 +151,7 @@ namespace rt {
 		
 	private:
 		const Vec3f								m_bgColor;    	///< background color
-		std::vector<std::shared_ptr<IPrim>> 	m_vpPrims;		///< Primitives
+		std::vector<ptr_prim_t> 				m_vpPrims;		///< Primitives
 		std::vector<std::shared_ptr<ILight>>	m_vpLights;		///< Lights
 		std::vector<std::shared_ptr<ICamera>>	m_vpCameras;	///< Cameras
 		size_t									m_activeCamera;	///< The index of the active camera

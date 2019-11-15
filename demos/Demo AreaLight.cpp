@@ -18,10 +18,12 @@ int main(int argc, char* argv[])
 
 	// primitives
 	// scene.add(std::make_shared<CPrimPlane>(pShaderFloor, Vec3f(0, 0, 0), Vec3f(0, 1, 0)));
-	const float s = 100;
-	const float h = -0.06f;
-	scene.add(std::make_shared<CPrimTriangle>(pShaderFloor, Vec3f(-s, h, -s), Vec3f(-s, h, s), Vec3f(s, h, -s)));
-	scene.add(std::make_shared<CPrimTriangle>(pShaderFloor, Vec3f(s, h, s), Vec3f(-s, h, s), Vec3f(s, h, -s)));
+	const float s = 6;
+	const float h = 0;
+	scene.add(std::make_shared<CPlane>(pShaderFloor, Vec3f(0, h, 0), Vec3f(s, 0, s), Vec3f(0, 0, s)));
+
+//	scene.add(std::make_shared<CPrimTriangle>(pShaderFloor, Vec3f(-s, h, -s), Vec3f(-s, h, s), Vec3f(s, h, -s)));
+//	scene.add(std::make_shared<CPrimTriangle>(pShaderFloor, Vec3f(s, h, s), Vec3f(-s, h, s), Vec3f(s, h, -s)));
 	// --- cube ---
 	scene.add(std::make_shared<CPrimTriangle>(pShaderTop,  Vec3f(1, 2, 1), Vec3f(-1, 2, 1), Vec3f(-1, 2, -1)));
 	scene.add(std::make_shared<CPrimTriangle>(pShaderTop,  Vec3f(1, 2, 1), Vec3f(1, 2, -1), Vec3f(-1, 2, -1)));

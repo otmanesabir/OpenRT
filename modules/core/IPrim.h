@@ -68,4 +68,6 @@ namespace rt {
 	private:
 		std::shared_ptr<IShader>	m_pShader;
 	};
+
+	using ptr_prim_t = std::shared_ptr<IPrim>;
 }

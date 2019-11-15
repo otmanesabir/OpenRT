@@ -7,6 +7,7 @@
 #include "core/PrimSphere.h"
 #include "core/PrimPlane.h"
 #include "core/PrimTriangle.h"
+#include "core/xxx.h"
 
 #include "core/ShaderFlat.h"
 #include "core/ShaderMirror.h"

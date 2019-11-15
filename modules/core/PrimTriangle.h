@@ -3,6 +3,7 @@
 #pragma once
 
 #include "IPrim.h"
+#include "ray.h"
 
 namespace rt {
 	/**
