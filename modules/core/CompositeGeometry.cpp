@@ -3,6 +3,7 @@
 #include <utility>
 #include <macroses.h>
 #include "Ray.h"
+#include "Transform.h"
 
 namespace rt {
 	
@@ -109,7 +110,21 @@ namespace rt {
 	}
 
 	void CCompositeGeometry::transform(const Mat &T) {
-		RT_WARNING("Method is not implemented");
+        CTransform tr;
+        Mat T1 = tr.translate(-m_origin).get();
+        Mat T2 = tr.translate(m_origin).get();
+
+        // Apply transformation on first solid
+        for (auto& pPrim : m_vpPrims1) pPrim->transform(T * T1);
+        for (auto& pPrim : m_vpPrims1) pPrim->transform(T2);
+
+        // Apply transformation on second solid
+        for (auto& pPrim : m_vpPrims2) pPrim->transform(T * T1);
+        for (auto& pPrim : m_vpPrims2) pPrim->transform(T2);
+
+        // Update origin point
+        for (int i = 0; i < 3; i++)
+            m_origin.val[i] += T.at<float>(i, 3);
 	}
 
 	Vec3f CCompositeGeometry::getNormal(const Ray &ray) const {
