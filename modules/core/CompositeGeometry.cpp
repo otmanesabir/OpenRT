@@ -9,7 +9,7 @@ namespace rt {
 
     // Constructor
     CCompositeGeometry::CCompositeGeometry(const CSolid &s1, const CSolid &s2, BoolOp operationType, int maxDepth,
-                                           int maxPrimitives)
+                                           int minPrimitives)
             : IPrim(nullptr), m_vPrims1(s1.getPrims()), m_vPrims2(s2.getPrims()), m_operationType(operationType)
 #ifdef ENABLE_BSP
     , m_pBSPTree1(new CBSPTree()), m_pBSPTree2(new CBSPTree())
@@ -48,8 +48,8 @@ namespace rt {
         m_boundingBox = CBoundingBox(minPt, maxPt);
         m_origin = m_boundingBox.getCenter();
 #ifdef ENABLE_BSP
-        m_pBSPTree1->build(m_vPrims1, maxPrimitives, maxDepth);
-        m_pBSPTree2->build(m_vPrims2, maxPrimitives, maxDepth);
+        m_pBSPTree1->build(m_vPrims1, maxDepth, minPrimitives);
+        m_pBSPTree2->build(m_vPrims2, maxDepth, minPrimitives);
 #endif
     }
 

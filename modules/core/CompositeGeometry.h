@@ -18,12 +18,12 @@ namespace rt {
          * @param s2 Second solid in the composite geometry.
          * @param operationType The type of operation this composite will be performing.
          * @param maxDepth The max depth of the BSP tree of the solids. Only used if BSP support is enabled.
-         * @param maxDepth The max number of primitives in the leaf nodes of the BSP tree of the solids. Only used if BSP support is enabled.
+         * @param minPrimitives The min number of primitives in the leaf nodes of the BSP tree of the solids. Only used if BSP support is enabled.
 		 * @todo what to do if the shader was already assigned to a solid?
          * @todo does it makes sense to construct the trees on object construction?
 		 */
         DllExport explicit CCompositeGeometry(const CSolid &s1, const CSolid &s2, BoolOp operationType,
-                                              int maxDepth = 3, int maxPrimitives = 20);
+                                              int maxDepth = 20, int minPrimitives = 3);
 
         DllExport virtual ~CCompositeGeometry(void) = default;
 
