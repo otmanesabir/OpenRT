@@ -16,6 +16,7 @@ namespace rt {
 		Vec3f							org;												///< %Ray origin
 		Vec3f							dir;												///< %Ray direction
 		size_t 							counter;											///< Number of re-traces
+		size_t                          hitCount = 0;
 		
 		double							t		= std::numeric_limits<double>::infinity();	///< Current/maximum hit distance
 		std::shared_ptr<const IPrim>	hit		= nullptr;									///< Pointer to currently closest primitive

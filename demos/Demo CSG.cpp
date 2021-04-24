@@ -4,6 +4,33 @@
 
 using namespace rt;
 
+void miniTest() {
+    const Vec3f bgColor = RGB(0.3, 0.3, 0.3);
+    const Size resolution = Size(100, 100);
+    const float intensity = 5e4;
+    // Shaders
+    auto pShaderRed = std::make_shared<CShaderEyelight>(RGB(1, 0, 0));
+    auto pShaderBlue = std::make_shared<CShaderEyelight>(RGB(0, 0, 1));
+
+    // Light
+    auto pLight = std::make_shared<CLightOmni>(intensity * RGB(1.0f, 0.839f, 0.494f), Vec3f(100, 150.0f, 100), false);
+    // Scene
+    CScene scene(bgColor);
+    // Geometries
+    auto 		solidSphere1 = CSolidSphere(pShaderRed, Vec3f(1, 0.1f, -13), 3.0f, 16, false);
+    auto 		solidSphere2 = CSolidSphere(pShaderBlue, Vec3f(0.3, 0.1f, -13), 3.0f, 16, false);
+    auto 	pComposize	 = std::make_shared<CCompositeGeometry>(solidSphere2, solidSphere1, BoolOp::Union, 20, 3);
+    std::cout << solidSphere1.getPrims().size()*2 << std::endl;
+    // Camera
+    auto targetCamera = std::make_shared<CCameraPerspectiveTarget>(resolution, Vec3f(2, 5, -4), pComposize->getBoundingBox().getCenter(), Vec3f(0, 1, 0), 45.0f);
+    scene.add(targetCamera);
+    scene.add(pLight);
+    scene.add(pComposize);
+    //scene.buildAccelStructure(20, 2);
+    auto image = scene.render();
+    cv::imwrite("../../sample_render.png", image);
+}
+
 void timeTests(const String& filePath) {
     std::ofstream myFile;
     myFile.open (filePath);
@@ -244,6 +271,7 @@ void viewPortTests(std::string filePath) {
 int main() {
     //nestingTests("../../nesting_bin_union.txt");
     //viewPortTests("../../viewport_base_union.txt");
-    timeTests("../../tests_bsp_optim_intersection.txt");
+    //timeTests("../../tests_bsp_optim_intersection.txt");
+    miniTest();
     return 0;
 }

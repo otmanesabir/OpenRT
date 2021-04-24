@@ -1,3 +1,4 @@
+#include <fstream>
 #include "BSPTree.h"
 #include "IPrim.h"
 #include "Ray.h"
@@ -39,9 +40,12 @@ namespace rt {
         double t0 = 0;
         double t1 = ray.t;
         m_treeBoundingBox.clip(ray, t0, t1);
-        if (t1 < t0) return false;  // no intersection with the bounding box
+        if (t1 < t0) {
+            return false;  // no intersection with the bounding box
+        }
 
-        return m_root->intersect(ray, t0, t1);
+        auto result = m_root->intersect(ray, t0, t1);
+        return result;
     }
 
     bool CBSPTree::intersect_furthest(Ray &ray) const {

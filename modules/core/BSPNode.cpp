@@ -1,3 +1,4 @@
+#include <fstream>
 #include "BSPNode.h"
 #include "Ray.h"
 
@@ -5,8 +6,10 @@ namespace rt {
     bool CBSPNode::intersect(Ray& ray, double t0, double t1) const
     {
         if (isLeaf()) {
-            for (auto& pPrim : m_vpPrims)
+            for (auto& pPrim : m_vpPrims) {
+                ray.hitCount++;
                 pPrim->intersect(ray);
+            }
             return (ray.hit && ray.t < t1 + Epsilon);
         }
         else {

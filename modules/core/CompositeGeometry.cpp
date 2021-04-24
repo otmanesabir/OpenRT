@@ -2,6 +2,7 @@
 
 #include <utility>
 #include <macroses.h>
+#include <fstream>
 #include "ray.h"
 #include "Transform.h"
 
@@ -76,6 +77,7 @@ namespace rt {
         }
 #else
         for (const auto &prim : m_vPrims1) {
+            ray.hitCount++;
             Ray r = ray;
             if (prim->intersect(r)) {
                 if (r.t < range1.first.t)
@@ -86,6 +88,7 @@ namespace rt {
             }
         }
         for (const auto &prim : m_vPrims2) {
+            ray.hitCount++;
             Ray r = ray;
             if (prim->intersect(r)) {
                 if (r.t < range2.first.t)
@@ -98,6 +101,7 @@ namespace rt {
 #endif
         if (!hasIntersection)
             return false;
+        int lastHitCount = ray.hitCount;
         double t;
         switch (m_operationType) {
             case BoolOp::Union:
@@ -109,8 +113,9 @@ namespace rt {
                 break;
             case BoolOp::Intersection:
                 t = MAX(range1.first.t, range2.first.t);
-                if (abs(t) >= Infty)
+                if (abs(t) >= Infty) {
                     return false;
+                }
                 if (abs(t - range1.first.t) < Epsilon)
                     ray = range1.first;
                 else if (abs(t - range2.first.t) < Epsilon)
@@ -139,6 +144,7 @@ namespace rt {
             default:
                 break;
         }
+        ray.hitCount = lastHitCount;
         return true;
     }
 

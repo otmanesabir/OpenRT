@@ -1,3 +1,4 @@
+#include <fstream>
 #include "Scene.h"
 #include "Ray.h"
 #include "Solid.h"
@@ -57,7 +58,6 @@ namespace rt {
 		ptr_camera_t activeCamera = getActiveCamera();
 		RT_ASSERT_MSG(activeCamera, "Camera is not found. Add at least one camera to the scene.");
 		Mat img(activeCamera->getResolution(), CV_32FC3, Scalar(0)); 	// image array
-		
 #ifdef DEBUG_PRINT_INFO
 		std::cout << "\nNumber of Primitives: " << m_vpPrims.size() << std::endl;
 		std::cout << "Number of light sources: " << m_vpLights.size() << std::endl;
@@ -72,12 +72,16 @@ namespace rt {
 #else
 		const Range range(0, img.rows);
 #endif
-		Ray ray;
 		for (int y = range.start; y < range.end; y++) {
 			Vec3f* pImg = img.ptr<Vec3f>(y);
 			for (int x = 0; x < img.cols; x++) {
 				size_t nSamples = pSampler ? pSampler->getNumSamples() : 1;
 				for (size_t s = 0; s < nSamples; s++) {
+                    Ray ray;
+                    std::ofstream myFile;
+                    myFile.open ("../../heat_tests.txt", std::ios_base::app);
+				    myFile << x << "," << y;
+				    myFile.close();
 					activeCamera->InitRay(ray, x, y, pSampler ? pSampler->getNextSample() : Vec2f::all(0.5f));
 					pImg[x] += rayTrace(ray);
 				}
@@ -140,12 +144,24 @@ namespace rt {
 	bool CScene::intersect(Ray& ray) const
 	{
 #ifdef ENABLE_BSP
-		return m_pBSPTree->intersect(ray);
+		auto result = m_pBSPTree->intersect(ray);
+        std::ofstream myFile;
+        myFile.open ("../../heat_tests.txt", std::ios_base::app);
+        myFile << "," << ray.hitCount << std::endl;
+        myFile.close();
+        ray.hitCount = 0;
+        return result;
 #else
 		bool hit = false;
-		for (auto& pPrim : m_vpPrims)
-			hit |= pPrim->intersect(ray);
-		return hit;
+		std::ofstream myFile;
+        myFile.open ("../../heat_tests.txt", std::ios_base::app);
+		for (auto& pPrim : m_vpPrims) {
+		    ray.hitCount++;
+            hit |= pPrim->intersect(ray);
+        }
+		myFile << "," << ray.hitCount << std::endl;
+        myFile.close();
+        return hit;
 #endif
 	}
 
