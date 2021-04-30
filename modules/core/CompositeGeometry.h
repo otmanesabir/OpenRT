@@ -42,6 +42,10 @@ namespace rt {
         DllExport virtual CBoundingBox getBoundingBox(void) const override { return m_boundingBox; }
 
     private:
+        bool computeDifference(Ray& ray) const;             ///< Helper method to classify the ray intersections for the difference.
+        bool computeIntersection(Ray& ray) const;           ///< Helper method to classify the ray intersections for the intersection.
+        bool computeUnion(Ray& ray) const;                  ///< Helper method to classify the ray intersections for the union.
+
         std::vector<ptr_prim_t> m_vPrims1;                ///< Vector of primitives of the first geometry.
         std::vector<ptr_prim_t> m_vPrims2;                ///< Vector of primitives of the second geometry.
         Vec3f m_origin;           ///< Origin/Pivot of the geometry.

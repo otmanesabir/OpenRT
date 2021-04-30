@@ -48,98 +48,20 @@ namespace rt {
         m_boundingBox = CBoundingBox(minPt, maxPt);
         m_origin = m_boundingBox.getCenter();
 #ifdef ENABLE_BSP
-        m_pBSPTree1->build(m_vPrims1, maxPrimitives, maxDepth);
-        m_pBSPTree2->build(m_vPrims2, maxPrimitives, maxDepth);
+        m_pBSPTree1->build(m_vPrims1, maxDepth, maxPrimitives);
+        m_pBSPTree2->build(m_vPrims2, maxDepth, maxPrimitives);
 #endif
     }
 
     bool CCompositeGeometry::intersect(Ray &ray) const {
-        std::pair<Ray, Ray> range1(ray, ray);
-        std::pair<Ray, Ray> range2(ray, ray);
-        range1.second.t = -Infty;
-        range2.second.t = -Infty;
-        bool hasIntersection = false;
-#ifdef ENABLE_BSP
-        hasIntersection = m_pBSPTree1->intersect(range1.first);
-        hasIntersection |= m_pBSPTree2->intersect(range2.first);
-        if (m_operationType == BoolOp::Difference) {
-            Ray r1 = ray;
-            Ray r2 = ray;
-            if (m_pBSPTree1->intersect_furthest(r1)) {
-                range1.second = r1;
-                hasIntersection = true;
-            }
-            if (m_pBSPTree2->intersect_furthest(r2)) {
-                range2.second = r2;
-                hasIntersection = true;
-            }
-        }
-#else
-        for (const auto &prim : m_vPrims1) {
-            Ray r = ray;
-            if (prim->intersect(r)) {
-                if (r.t < range1.first.t)
-                    range1.first = r;
-                if (r.t > range1.second.t)
-                    range1.second = r;
-                hasIntersection = true;
-            }
-        }
-        for (const auto &prim : m_vPrims2) {
-            Ray r = ray;
-            if (prim->intersect(r)) {
-                if (r.t < range2.first.t)
-                    range2.first = r;
-                if (r.t > range2.second.t)
-                    range2.second = r;
-                hasIntersection = true;
-            }
-        }
-#endif
-        if (!hasIntersection)
-            return false;
-        double t;
         switch (m_operationType) {
             case BoolOp::Union:
-                t = MIN(range1.first.t, range2.first.t);
-                if (abs(t - range1.first.t) < Epsilon)
-                    ray = range1.first;
-                else if (abs(t - range2.first.t) < Epsilon)
-                    ray = range2.first;
-                break;
-            case BoolOp::Intersection:
-                t = MAX(range1.first.t, range2.first.t);
-                if (abs(t) >= Infty)
-                    return false;
-                if (abs(t - range1.first.t) < Epsilon)
-                    ray = range1.first;
-                else if (abs(t - range2.first.t) < Epsilon)
-                    ray = range2.first;
-                break;
+                return computeUnion(ray);
             case BoolOp::Difference:
-                if (range1.first.t >= Infty || range1.second.t <= -Infty) {
-                    return false;
-                }
-                if (abs(range2.first.t - range1.first.t) < Epsilon) {
-                    ray = range2.second;
-                    break;
-                }
-                if (range2.first.t < range1.first.t) {
-                    if (range1.first.t > range2.second.t) {
-                        ray = range1.first;
-                    } else {
-                        ray = range2.second;
-                    }
-                } else if (range1.first.t < range2.first.t) {
-                    ray = range1.first;
-                } else {
-                    return false;
-                }
-                break;
-            default:
-                break;
+                return computeDifference(ray);
+            case BoolOp::Intersection:
+                return computeIntersection(ray);
         }
-        return true;
     }
 
     bool CCompositeGeometry::if_intersect(const Ray &ray) const {
@@ -170,5 +92,315 @@ namespace rt {
 
     Vec2f CCompositeGeometry::getTextureCoords(const Ray &ray) const {
         RT_ASSERT_MSG(false, "This method should never be called. Aborting...");
+    }
+
+    bool CCompositeGeometry::computeDifference(Ray &ray) const {
+        std::pair<Ray, Ray> range1(ray, ray);
+        std::pair<Ray, Ray> range2(ray, ray);
+        range1.second.t = -Infty;
+        range2.second.t = -Infty;
+        bool hasIntersection;
+#ifdef ENABLE_BSP
+        hasIntersection = m_pBSPTree1->intersect(range1.first);
+        Ray r1 = ray;
+        if (m_pBSPTree1->intersect_furthest(r1)) {
+            range1.second = r1;
+            hasIntersection |= true;
+        }
+#elif
+        for (const auto &prim : m_vPrims1) {
+            Ray r = ray;
+            if (prim->intersect(r)) {
+                if (r.t < range1.first.t)
+                    range1.first = r;
+                if (r.t > range1.second.t)
+                    range1.second = r;
+                hasIntersection = true;
+            }
+        }
+#endif
+        if (!hasIntersection) {
+            return false;
+        }
+#ifdef ENABLE_BSP
+        m_pBSPTree2->intersect(range2.first);
+        Ray r2 = ray;
+        if (m_pBSPTree2->intersect_furthest(r2)) {
+            range2.second = r2;
+        }
+#elif
+        for (const auto &prim : m_vPrims2) {
+            Ray r = ray;
+            if (prim->intersect(r)) {
+                if (r.t < range2.first.t)
+                    range2.first = r;
+                if (r.t > range2.second.t)
+                    range2.second = r;
+                hasIntersection = true;
+            }
+        }
+#endif
+        if (!range2.first.hit && !range2.second.hit) {
+            if (range1.first.hit && range1.second.hit) {
+                ray = range1.first.t < range1.second.t ? range1.first : range1.second;
+                return true;
+            }
+            else {
+                ray = range1.first.hit ? range1.first : range1.second;
+                return true;
+            }
+        }
+        if (range1.second.hit && range2.second.hit) {
+            if (range1.first.hit) {
+                if (range2.first.hit) {
+                    if (range1.first.t < range2.first.t) {
+                        ray = range1.first;
+                        return true;
+                    } else {
+                        if (range2.second.t < range1.second.t) {
+                            if (range2.second.t < range1.first.t) {
+                                ray = range1.first;
+                                return true;
+                            } else {
+                                ray = range2.second;
+                                return true;
+                            }
+                        } else {
+                            return false;
+                        }
+                    }
+                } else {
+                    if (range1.first.t < range2.second.t && range2.second.t < range1.second.t) {
+                        ray = range2.second;
+                        return true;
+                    }
+                }
+            } else {
+                if (range2.first.hit) {
+                    if (range2.first.t < range1.second.t) {
+                        ray = range2.first;
+                        return true;
+                    }
+                } else {
+                    if (range2.second.t < range1.second.t) {
+                        ray = range2.second;
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    bool CCompositeGeometry::computeUnion(Ray &ray) const {
+        std::pair<Ray, Ray> range1(ray, ray);
+        std::pair<Ray, Ray> range2(ray, ray);
+        range1.second.t = -Infty;
+        range2.second.t = -Infty;
+#ifdef ENABLE_BSP
+        m_pBSPTree1->intersect(range1.first);
+        m_pBSPTree2->intersect(range2.first);
+#elif
+        for (const auto &prim : m_vPrims1) {
+            Ray r = ray;
+            if (prim->intersect(r)) {
+                if (r.t < range1.first.t)
+                    range1.first = r;
+                if (r.t > range1.second.t)
+                    range1.second = r;
+            }
+        }
+        for (const auto &prim : m_vPrims2) {
+            Ray r = ray;
+            if (prim->intersect(r)) {
+                if (r.t < range2.first.t)
+                    range2.first = r;
+                if (r.t > range2.second.t)
+                    range2.second = r;
+            }
+        }
+#endif
+        if (range1.first.hit && range2.first.hit) {
+            ray = range1.first.t < range2.first.t ? range1.first : range2.first;
+            return true;
+        }
+        if (range1.first.hit and !range2.first.hit) {
+#ifdef ENABLE_BSP
+            Ray r2 = ray;
+            if (m_pBSPTree2->intersect_furthest(r2)) {
+                range2.second = r2;
+            }
+#endif
+            if (!range2.second.hit) {
+                ray = range1.first;
+                return true;
+            }
+            if (range2.second.t < range1.first.t) {
+                ray = range2.second;
+                return true;
+            }
+#ifdef ENABLE_BSP
+            Ray r1 = ray;
+            if (m_pBSPTree1->intersect_furthest(r1)) {
+                range1.second = r1;
+            }
+#endif
+            ray = range1.second;
+            return true;
+        } else if (!range1.first.hit and range2.first.hit) {
+#ifdef ENABLE_BSP
+            Ray r1 = ray;
+            if (m_pBSPTree1->intersect_furthest(r1)) {
+                range1.second = r1;
+            }
+#endif
+            if (!range1.second.hit) {
+                ray = range2.first;
+                return true;
+            }
+            if (range1.second.t < range2.first.t) {
+                ray = range1.second;
+                return true;
+            }
+#ifdef ENABLE_BSP
+            Ray r2 = ray;
+            if (m_pBSPTree2->intersect_furthest(r2)) {
+                range2.second = r2;
+            }
+#endif
+            ray = range2.second;
+            return true;
+        }
+        else if (!range1.first.hit && !range2.first.hit) {
+#ifdef ENABLE_BSP
+            Ray r1 = ray;
+            if (m_pBSPTree1->intersect_furthest(r1)) {
+                range1.second = r1;
+            }
+            Ray r2 = ray;
+            if (m_pBSPTree2->intersect_furthest(r2)) {
+                range2.second = r2;
+            }
+#endif
+            if (!range1.second.hit && !range2.second.hit) {
+                return false;
+            } else {
+                ray = range1.second.t > range2.second.t ? range1.second : range2.second;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool CCompositeGeometry::computeIntersection(Ray &ray) const {
+        std::pair<Ray, Ray> range1(ray, ray);
+        std::pair<Ray, Ray> range2(ray, ray);
+        range1.second.t = -Infty;
+        range2.second.t = -Infty;
+#ifdef ENABLE_BSP
+        m_pBSPTree1->intersect(range1.first);
+        m_pBSPTree2->intersect(range2.first);
+#elif
+        for (const auto &prim : m_vPrims1) {
+            Ray r = ray;
+            if (prim->intersect(r)) {
+                if (r.t < range1.first.t)
+                    range1.first = r;
+                if (r.t > range1.second.t)
+                    range1.second = r;
+            }
+        }
+        for (const auto &prim : m_vPrims2) {
+            Ray r = ray;
+            if (prim->intersect(r)) {
+                if (r.t < range2.first.t)
+                    range2.first = r;
+                if (r.t > range2.second.t)
+                    range2.second = r;
+            }
+        }
+#endif
+        if (range1.first.hit && range2.first.hit) {
+            if (range1.first.t < range2.first.t) {
+#ifdef ENABLE_BSP
+                Ray r1 = ray;
+                if (m_pBSPTree1->intersect_furthest(r1)) {
+                    range1.second = r1;
+                }
+#endif
+                if (range2.first.t < range1.second.t) {
+                    ray = range2.first;
+                    return true;
+                }
+            } else {
+#ifdef ENABLE_BSP
+                Ray r2 = ray;
+                if (m_pBSPTree2->intersect_furthest(r2)) {
+                    range2.second = r2;
+                }
+#endif
+                if (range1.first.t < range2.second.t) {
+                    ray = range1.first;
+                    return true;
+                }
+            }
+            return false;
+        } else if (range1.first.hit && !range2.first.hit) {
+#ifdef ENABLE_BSP
+            Ray r2 = ray;
+            if (m_pBSPTree2->intersect_furthest(r2)) {
+                range2.second = r2;
+            }
+#endif
+            if (!range2.second.hit) return false;
+#ifdef ENABLE_BSP
+            Ray r1 = ray;
+            if (m_pBSPTree1->intersect_furthest(r1)) {
+                range1.second = r1;
+            }
+#endif
+            if (range1.first.t < range2.second.t && range2.second.t < range1.second.t) {
+                ray = range1.first;
+                return true;
+            }
+            return false;
+        } else if (!range1.first.hit && range2.first.hit) {
+#ifdef ENABLE_BSP
+            Ray r1 = ray;
+            if (m_pBSPTree1->intersect_furthest(r1)) {
+                range1.second = r1;
+            }
+#endif
+            if (!range1.second.hit) return false;
+#ifdef ENABLE_BSP
+            Ray r2 = ray;
+            if (m_pBSPTree2->intersect_furthest(r2)) {
+                range2.second = r2;
+            }
+#endif
+            if (range2.first.t < range1.second.t && range1.second.t < range2.second.t) {
+                ray = range2.first;
+                return true;
+            }
+            return false;
+        }
+        if (!range1.first.hit && !range2.first.hit) {
+#ifdef ENABLE_BSP
+            Ray r1 = ray;
+            if (m_pBSPTree1->intersect_furthest(r1)) {
+                range1.second = r1;
+            }
+            Ray r2 = ray;
+            if (m_pBSPTree2->intersect_furthest(r2)) {
+                range2.second = r2;
+            }
+#endif
+            if (!range1.second.hit || !range2.second.hit) {
+                return false;
+            }
+            ray = range1.second.t > range2.second.t ? range1.second : range2.second;
+            return true;
+        }
+        return false;
     }
 }
