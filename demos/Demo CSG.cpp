@@ -4,10 +4,10 @@
 
 using namespace rt;
 
-void timeTests(const String& filePath) {
+void timeTests(const String& filePath, BoolOp operationType, int iterations, const Vec3f& cameraPos) {
     std::ofstream myFile;
     myFile.open (filePath);
-    const Vec3f bgColor = RGB(0.3, 0.3, 0.3);
+    const Vec3f bgColor = RGB(1, 1, 1);
     const Size resolution = Size(1920, 1200);
     const float intensity = 5e4;
 
@@ -18,16 +18,16 @@ void timeTests(const String& filePath) {
     // Light
     auto pLight = std::make_shared<CLightOmni>(intensity * RGB(1.0f, 0.839f, 0.494f), Vec3f(100, 150.0f, 100), false);
 
-    for (int i = 6; i < 206; i++) {
+    for (int i = 6; i <= iterations + 6; i++) {
         // Scene
         CScene scene(bgColor);
         // Geometries
         auto 		solidSphere1 = CSolidSphere(pShaderRed, Vec3f(1, 0.1f, -13), 1.5f, i, false);
         auto 		solidSphere2 = CSolidSphere(pShaderBlue, Vec3f(0, 0.1f, -13), 1.5f, i, false);
-        auto 	pComposize	 = std::make_shared<CCompositeGeometry>(solidSphere2, solidSphere1, BoolOp::Intersection, 20, 3);
+        auto 	pComposize	 = std::make_shared<CCompositeGeometry>(solidSphere2, solidSphere1, operationType, 20, 3);
 
         // Camera
-        auto targetCamera = std::make_shared<CCameraPerspectiveTarget>(resolution, Vec3f(5, 10, -10), pComposize->getBoundingBox().getCenter(), Vec3f(0, 1, 0), 45.0f);
+        auto targetCamera = std::make_shared<CCameraPerspectiveTarget>(resolution, cameraPos, pComposize->getBoundingBox().getCenter(), Vec3f(0, 1, 0), 45.0f);
         scene.add(targetCamera);
         scene.add(pLight);
         scene.add(pComposize);
@@ -44,14 +44,22 @@ void timeTests(const String& filePath) {
         // log count to file
         myFile << nPrimitives << "," << duration << std::endl;
         std::cout << nPrimitives << "," << duration << std::endl;
-        std::cout << "Progress: " << i/206.0 * 100.0 << "%" << std::endl;
+        std::cout << "Progress: " << (float)(i-6)/(float)iterations * 100.0 << "%" << std::endl;
 
         std::string counterPath = "../../num.txt";
         int renderCount = 0;
         std::ifstream countFile(counterPath, std::ios::binary);
         countFile.read((char *) &renderCount, sizeof(renderCount));
         countFile.close();
-        imwrite("../../timeTestsRenders/optim_bsp_intersection_" + std::to_string(renderCount) + ".png", image);
+        String initialPath;
+        if (operationType == BoolOp::Union){
+            initialPath = "../../timeTestsRenders/bin_union_";
+        } else if (operationType == BoolOp::Intersection){
+            initialPath = "../../timeTestsRenders/bin_intersection_";
+        } else {
+            initialPath = "../../timeTestsRenders/bin_difference_";
+        }
+        imwrite(initialPath + std::to_string(renderCount) + ".png", image);
         renderCount++;
         std::ofstream o(counterPath, std::ios::binary);
         o.write((char *) &renderCount, sizeof(renderCount));
@@ -60,7 +68,7 @@ void timeTests(const String& filePath) {
     myFile.close();
 }
 
-void nestingTests(std::string filePath) {
+void nestingTests(std::string filePath, int steps) {
     std::ofstream myFile;
     myFile.open (filePath);
     const Vec3f bgColor = RGB(1, 1, 1);
@@ -76,7 +84,7 @@ void nestingTests(std::string filePath) {
     auto solidSphere2 = CSolidSphere(pShaderOrange, Vec3f(1, 0, 0), 1.4, 24, false);
     ptr_prim_t composite = std::make_shared<CCompositeGeometry>(solidSphere1, solidSphere2, BoolOp::Union);
 
-    for (int i = 2; i < 16; i++) {
+    for (int i = 2; i < steps; i++) {
         CScene scene(bgColor);
 
         if (i % 4 == 0) {
@@ -88,7 +96,7 @@ void nestingTests(std::string filePath) {
 
         scene.add(composite);
 
-        auto targetCamera = std::make_shared<CCameraPerspectiveTarget>(resolution, Vec3f(0 + (i / 4.0) , 5 + (i / 4.0), 3 + (i / 4.0)), composite->getBoundingBox().getCenter(), Vec3f(0, 1, 0), 45.0f);
+        auto targetCamera = std::make_shared<CCameraPerspectiveTarget>(resolution, Vec3f(0 + (i / 4.0) , 5.0 + (i / 4.0), 3.0 + (i / 4.0)), composite->getBoundingBox().getCenter(), Vec3f(0, 1, 0), 45.0f);
         scene.add(targetCamera);
 
         // Light
@@ -244,6 +252,21 @@ void viewPortTests(std::string filePath) {
 int main() {
     //nestingTests("../../nesting_bin_union.txt");
     //viewPortTests("../../viewport_base_union.txt");
-    timeTests("../../tests_bsp_optim_intersection.txt");
+
+    // Low View Port : 31.656944444444445
+    //timeTests("../../timeTests/bin_union_lvp.txt", BoolOp::Union, 300, Vec3f(4.5, 2, -15)); // already done
+    //timeTests("../../timeTests/bin_intersection_lvp.txt", BoolOp::Intersection, 300, Vec3f(4.5, 2, -15));
+    //timeTests("../../timeTests/bin_difference_lvp.txt", BoolOp::Difference, 300, Vec3f(4.5, 2, -15));
+
+    // Mid View Port : 64.02730034722222
+    //timeTests("../../timeTests/bin_union_mvp.txt", BoolOp::Union, 300, Vec3f(3, 2, -14));
+    //timeTests("../../timeTests/bin_intersection_mvp.txt", BoolOp::Intersection, 300, Vec3f(3, 2, -14));
+    //timeTests("../../timeTests/bin_difference_mvp.txt", BoolOp::Difference, 300, Vec3f(3, 2, -14));
+
+    // High View Port : 98.26840277777778
+    //timeTests("../../timeTests/bin_union_hvp.txt", BoolOp::Union, 300, Vec3f(2, 1, -14.5));
+    //timeTests("../../timeTests/bin_intersection_hvp.txt", BoolOp::Intersection, 300, Vec3f(2, 1, -14.5));
+    //timeTests("../../timeTests/bin_difference_hvp.txt", BoolOp::Difference, 300, Vec3f(2, 1, -14.5));
+    nestingTests("../../timeTests/bin_nests_hvp.txt", 22);
     return 0;
 }

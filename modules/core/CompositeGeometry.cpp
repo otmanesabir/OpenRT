@@ -11,9 +11,6 @@ namespace rt {
     CCompositeGeometry::CCompositeGeometry(const CSolid &s1, const CSolid &s2, BoolOp operationType, int maxDepth,
                                            int minPrimitives)
             : IPrim(nullptr), m_vPrims1(s1.getPrims()), m_vPrims2(s2.getPrims()), m_operationType(operationType)
-#ifdef ENABLE_BSP
-    , m_pBSPTree1(new CBSPTree()), m_pBSPTree2(new CBSPTree())
-#endif
     {
         // Initializing the bounding box
         CBoundingBox boxA, boxB;
@@ -47,10 +44,6 @@ namespace rt {
         }
         m_boundingBox = CBoundingBox(minPt, maxPt);
         m_origin = m_boundingBox.getCenter();
-#ifdef ENABLE_BSP
-        m_pBSPTree1->build(m_vPrims1, maxDepth, minPrimitives);
-        m_pBSPTree2->build(m_vPrims2, maxDepth, minPrimitives);
-#endif
     }
 
     bool CCompositeGeometry::intersect(Ray &ray) const {
@@ -59,22 +52,6 @@ namespace rt {
         range1.second.t = -Infty;
         range2.second.t = -Infty;
         bool hasIntersection = false;
-#ifdef ENABLE_BSP
-        hasIntersection = m_pBSPTree1->intersect(range1.first);
-        hasIntersection |= m_pBSPTree2->intersect(range2.first);
-        if (m_operationType == BoolOp::Difference) {
-            Ray r1 = ray;
-            Ray r2 = ray;
-            if (m_pBSPTree1->intersect_furthest(r1)) {
-                range1.second = r1;
-                hasIntersection = true;
-            }
-            if (m_pBSPTree2->intersect_furthest(r2)) {
-                range2.second = r2;
-                hasIntersection = true;
-            }
-        }
-#else
         for (const auto &prim : m_vPrims1) {
             Ray r = ray;
             if (prim->intersect(r)) {
@@ -95,7 +72,6 @@ namespace rt {
                 hasIntersection = true;
             }
         }
-#endif
         if (!hasIntersection)
             return false;
         double t;
