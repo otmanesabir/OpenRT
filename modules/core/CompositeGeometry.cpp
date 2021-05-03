@@ -63,6 +63,7 @@ namespace rt {
 #ifdef ENABLE_BSP
         hasIntersection = m_pBSPTree1->intersect(range1.first);
         hasIntersection |= m_pBSPTree2->intersect(range2.first);
+        ray.hitCount += range1.first.hitCount + range2.first.hitCount;
         if (m_operationType == BoolOp::Difference) {
             Ray r1 = ray;
             Ray r2 = ray;
