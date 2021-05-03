@@ -7,7 +7,8 @@ namespace rt {
 	{
 		float dist = (m_origin - ray.org).dot(m_normal) / ray.dir.dot(m_normal);
 		if (dist < Epsilon || isinf(dist) || dist > ray.t) return false;
-
+		Ray temp = ray;
+        if (this->getNormal(temp).dot(temp.dir) > 0) return false;
 		ray.t = dist;
 		ray.hit = shared_from_this();
 		return true;
@@ -59,7 +60,7 @@ namespace rt {
 		return res;
 	}
 
-	CBoundingBox CPrimPlane::getBoundingBox(void) const
+	CBoundingBox CPrimPlane::getBoundingBox() const
 	{
 		Vec3f minPoint = Vec3f::all(-Infty);
 		Vec3f maxPoint = Vec3f::all(Infty);
@@ -71,4 +72,18 @@ namespace rt {
 			}
 		return CBoundingBox(minPoint, maxPoint);
 	}
+
+    bool CPrimPlane::intersect_furthest(Ray &ray) const {
+        if (ray.t >= Infty) {
+            ray.t = -ray.t;
+        }
+        float dist = (m_origin - ray.org).dot(m_normal) / ray.dir.dot(m_normal);
+        if (dist < Epsilon || isinf(dist) || dist < ray.t) return false;
+        Ray temp = ray;
+        temp.t = dist;
+        if (this->getNormal(temp).dot(temp.dir) <= 0) return false;
+        ray.t = dist;
+        ray.hit = shared_from_this();
+        return true;
+    }
 }
