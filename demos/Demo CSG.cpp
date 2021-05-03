@@ -5,8 +5,8 @@
 using namespace rt;
 
 void miniTest() {
-    const Vec3f bgColor = RGB(0.3, 0.3, 0.3);
-    const Size resolution = Size(100, 100);
+    const Vec3f bgColor = RGB(1, 1, 1);
+    const Size resolution = Size(1000, 1000);
     const float intensity = 5e4;
     // Shaders
     auto pShaderRed = std::make_shared<CShaderEyelight>(RGB(1, 0, 0));
@@ -26,7 +26,7 @@ void miniTest() {
     scene.add(targetCamera);
     scene.add(pLight);
     scene.add(pComposize);
-    //scene.buildAccelStructure(20, 2);
+    scene.buildAccelStructure(30, 2);
     auto image = scene.render();
     cv::imwrite("../../sample_render.png", image);
 }
