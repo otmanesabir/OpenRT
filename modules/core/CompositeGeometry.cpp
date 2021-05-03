@@ -11,7 +11,7 @@ namespace rt {
     CCompositeGeometry::CCompositeGeometry(const CSolid &s1, const CSolid &s2, BoolOp operationType, int maxDepth,
                                            int maxPrimitives)
             : IPrim(nullptr), m_vPrims1(s1.getPrims()), m_vPrims2(s2.getPrims()), m_operationType(operationType)
-#ifdef ENABLE_BSP
+#ifdef ENABLE_CSG_OPTIM
     , m_pBSPTree1(new CBSPTree()), m_pBSPTree2(new CBSPTree())
 #endif
     {
@@ -47,24 +47,26 @@ namespace rt {
         }
         m_boundingBox = CBoundingBox(minPt, maxPt);
         m_origin = m_boundingBox.getCenter();
-#ifdef ENABLE_BSP
-        m_pBSPTree1->build(m_vPrims1, maxPrimitives, maxDepth);
-        m_pBSPTree2->build(m_vPrims2, maxPrimitives, maxDepth);
+#ifdef ENABLE_CSG_OPTIM
+        m_pBSPTree1->build(m_vPrims1, maxDepth, maxPrimitives);
+        m_pBSPTree2->build(m_vPrims2, maxDepth, maxPrimitives);
 #endif
     }
 
     bool CCompositeGeometry::intersect(Ray &ray) const {
-        std::pair<Ray, Ray> range1(ray, ray);
-        std::pair<Ray, Ray> range2(ray, ray);
-        range1.second.t = -Infty;
-        range2.second.t = -Infty;
+        Ray modRay;
+        modRay.dir = ray.dir;
+        modRay.org = ray.org;
+        modRay.counter = ray.counter;
+        std::pair<Ray, Ray> range1(modRay, modRay);
+        std::pair<Ray, Ray> range2(modRay, modRay);
         bool hasIntersection = false;
-#ifdef ENABLE_BSP
+#ifdef ENABLE_CSG_OPTIM
         hasIntersection = m_pBSPTree1->intersect(range1.first);
         hasIntersection |= m_pBSPTree2->intersect(range2.first);
         if (m_operationType == BoolOp::Difference) {
-            Ray r1 = ray;
-            Ray r2 = ray;
+            Ray r1 = modRay;
+            Ray r2 = modRay;
             if (m_pBSPTree1->intersect_furthest(r1)) {
                 range1.second = r1;
                 hasIntersection = true;
@@ -76,92 +78,145 @@ namespace rt {
         }
 #else
         for (const auto &prim : m_vPrims1) {
-            Ray r = ray;
-            if (prim->intersect(r)) {
-                if (r.t < range1.first.t)
-                    range1.first = r;
-                if (r.t > range1.second.t)
-                    range1.second = r;
-                hasIntersection = true;
-            }
+            hasIntersection |= prim->intersect(range1.first);
+            hasIntersection |= prim->intersect_furthest(range1.second);
         }
         for (const auto &prim : m_vPrims2) {
-            Ray r = ray;
-            if (prim->intersect(r)) {
-                if (r.t < range2.first.t)
-                    range2.first = r;
-                if (r.t > range2.second.t)
-                    range2.second = r;
-                hasIntersection = true;
-            }
+            hasIntersection |= prim->intersect(range2.first);
+            hasIntersection |= prim->intersect_furthest(range2.second);
         }
 #endif
         if (!hasIntersection)
             return false;
-        double t;
+        Ray res;
         switch (m_operationType) {
             case BoolOp::Union:
-                t = MIN(range1.first.t, range2.first.t);
-                if (abs(t - range1.first.t) < Epsilon)
-                    ray = range1.first;
-                else if (abs(t - range2.first.t) < Epsilon)
-                    ray = range2.first;
-                break;
+                if (range1.first.hit && range2.first.hit) {
+                    res = range1.first.t < range2.first.t ? range1.first : range2.first;
+                    break;
+                }
+                if (range1.first.hit and !range2.first.hit) {
+                    if (!range2.second.hit) {
+                        res = range1.first;
+                        break;
+                    }
+                    if (range2.second.t < range1.first.t) {
+                        res = range2.second;
+                        break;
+                    }
+                    res = range1.second;
+                    break;
+                } else if (!range1.first.hit and range2.first.hit) {
+                    if (!range1.second.hit) {
+                        res = range2.first;
+                        break;
+                    }
+                    if (range1.second.t < range2.first.t) {
+                        res = range1.second;
+                        break;
+                    }
+                    res = range2.second;
+                    break;
+                }
+                else if (!range1.first.hit && !range2.first.hit) {
+                    if (!range1.second.hit && !range2.second.hit) {
+                        return false;
+                    } else {
+                        res = range1.second.t > range2.second.t ? range1.second : range2.second;
+                        break;
+                    }
+                }
+                return false;
             case BoolOp::Intersection:
-                t = MAX(range1.first.t, range2.first.t);
-                if (abs(t) >= Infty)
+                if (range1.first.hit && range2.first.hit) {
+                    if (range1.first.t < range2.first.t) {
+                        if (range2.first.t < range1.second.t) {
+                            res = range2.first;
+                            break;
+                        }
+                    } else {
+                        if (range1.first.t < range2.second.t) {
+                            res = range1.first;
+                            break;
+                        }
+                    }
                     return false;
-                if (abs(t - range1.first.t) < Epsilon)
-                    ray = range1.first;
-                else if (abs(t - range2.first.t) < Epsilon)
-                    ray = range2.first;
+                } else if (range1.first.hit && !range2.first.hit) {
+                    if (!range2.second.hit) return false;
+                    if (range1.first.t < range2.second.t && range2.second.t < range1.second.t) {
+                        res = range1.first;
+                        break;
+                    }
+                    return false;
+                } else if (!range1.first.hit && range2.first.hit) {
+                    if (!range1.second.hit) return false;
+                    if (range2.first.t < range1.second.t && range1.second.t < range2.second.t) {
+                        res = range2.first;
+                        break;
+                    }
+                    return false;
+                }
+                if (!range1.first.hit && !range2.first.hit) {
+                    if (!range1.second.hit || !range2.second.hit) {
+                        return false;
+                    }
+                    res = range1.second.t > range2.second.t ? range1.second : range2.second;
+                    break;
+                }
                 break;
             case BoolOp::Difference:
+                if (!range1.first.hit && !range1.second.hit) {
+                    return false;
+                }
                 if (!range2.first.hit && !range2.second.hit) {
                     if (range1.first.hit && range1.second.hit) {
-                        ray = range1.first.t < range1.second.t ? range1.first : range1.second;
-                        return true;
+                        res = range1.first;
+                        break;
                     }
                     else {
-                        ray = range1.first.hit ? range1.first : range1.second;
-                        return true;
+                        return false;
+                    }
+                }
+                if (range2.first.hit && !range2.second.hit && range1.first.hit && range1.second.hit) {
+                    if (range2.first.t <= range1.first.t) {
+                        res = range1.first;
+                        break;
                     }
                 }
                 if (range1.second.hit && range2.second.hit) {
                     if (range1.first.hit) {
                         if (range2.first.hit) {
-                            if (range1.first.t < range2.first.t) {
-                                ray = range1.first;
-                                return true;
-                            } else {
-                                if (range2.second.t < range1.second.t) {
-                                    if (range2.second.t < range1.first.t) {
-                                        ray = range1.first;
-                                        return true;
-                                    } else {
-                                        ray = range2.second;
-                                        return true;
-                                    }
+                            // case of all 4 intersections.
+                            if (range1.first.t <= range2.first.t) {
+                                if (range2.first.t < range1.second.t && range1.second.t < range2.second.t) {
+                                    ray = range1.first;
+                                    break;
+                                } else if (range1.second.t < range2.first.t && range2.first.t < range2.second.t) {
+                                    res = range1.first;
+                                    break;
+                                } else if (range2.first.t < range2.second.t && range2.second.t < range1.second.t) {
+                                    res = range1.first;
+                                    break;
                                 } else {
                                     return false;
                                 }
-                            }
-                        } else {
-                            if (range1.first.t < range2.second.t && range2.second.t < range1.second.t) {
-                                ray = range2.second;
-                                return true;
+                            } else {
+                                if (range1.first.t < range2.second.t && range2.second.t < range1.second.t) {
+                                    res = range2.second;
+                                    break;
+                                } else if (range2.second.t < range1.first.t) {
+                                    res = range1.first;
+                                    break;
+                                }
                             }
                         }
                     } else {
                         if (range2.first.hit) {
-                            if (range2.first.t < range1.second.t) {
-                                ray = range2.first;
-                                return true;
-                            }
+                            return false;
                         } else {
                             if (range2.second.t < range1.second.t) {
-                                ray = range2.second;
-                                return true;
+                                res = range2.second;
+                                break;
                             }
                         }
                     }
@@ -170,11 +225,18 @@ namespace rt {
             default:
                 break;
         }
-        return true;
+        if (res.hit) {
+            if (ray.hit && ray.t < res.t) {
+                return false;
+            }
+            ray = res;
+            return true;
+        }
+        return false;
     }
 
     bool CCompositeGeometry::if_intersect(const Ray &ray) const {
-        return intersect(lvalue_cast(Ray(ray)));
+        return intersect(lvalue_cast(Ray(ray))) || intersect_furthest(lvalue_cast(Ray(ray)));
     }
 
     void CCompositeGeometry::transform(const Mat &T) {
@@ -201,5 +263,193 @@ namespace rt {
 
     Vec2f CCompositeGeometry::getTextureCoords(const Ray &ray) const {
         RT_ASSERT_MSG(false, "This method should never be called. Aborting...");
+    }
+
+    bool CCompositeGeometry::intersect_furthest(Ray &ray) const {
+        Ray modRay;
+        modRay.dir = ray.dir;
+        modRay.org = ray.org;
+        modRay.counter = ray.counter;
+        std::pair<Ray, Ray> range1(modRay, modRay);
+        std::pair<Ray, Ray> range2(modRay, modRay);
+        bool hasIntersection = false;
+#ifdef ENABLE_CSG_OPTIM
+        hasIntersection = m_pBSPTree1->intersect(range1.first);
+        hasIntersection |= m_pBSPTree2->intersect(range2.first);
+        if (m_operationType == BoolOp::Difference) {
+            Ray r1 = modRay;
+            Ray r2 = modRay;
+            if (m_pBSPTree1->intersect_furthest(r1)) {
+                range1.second = r1;
+                hasIntersection = true;
+            }
+            if (m_pBSPTree2->intersect_furthest(r2)) {
+                range2.second = r2;
+                hasIntersection = true;
+            }
+        }
+#else
+        for (const auto &prim : m_vPrims1) {
+            hasIntersection |= prim->intersect(range1.first);
+            hasIntersection |= prim->intersect_furthest(range1.second);
+        }
+        for (const auto &prim : m_vPrims2) {
+            hasIntersection |= prim->intersect(range2.first);
+            hasIntersection |= prim->intersect_furthest(range2.second);
+        }
+#endif
+        if (!hasIntersection)
+            return false;
+        Ray res;
+        switch (m_operationType) {
+            case BoolOp::Union:
+                if (range1.first.hit && range2.first.hit) {
+                    res = range1.first;
+                    break;
+                }
+                if (range1.first.hit and !range2.first.hit) {
+                    if (!range2.second.hit) {
+                        res = range1.first;
+                        break;
+                    }
+                    if (range2.second.t < range1.first.t) {
+                        res = range2.second;
+                        break;
+                    }
+                    res = range1.second;
+                    break;
+                } else if (!range1.first.hit and range2.first.hit) {
+                    if (!range1.second.hit) {
+                        res = range2.first;
+                        break;
+                    }
+                    if (range1.second.t < range2.first.t) {
+                        res = range1.second;
+                        break;
+                    }
+                    res = range2.second;
+                    break;
+                }
+                else if (!range1.first.hit && !range2.first.hit) {
+                    if (!range1.second.hit && !range2.second.hit) {
+                        return false;
+                    } else {
+                        res = range1.second.t > range2.second.t ? range1.second : range2.second;
+                        break;
+                    }
+                }
+                return false;
+            case BoolOp::Intersection:
+                if (range1.first.hit && range2.first.hit) {
+                    if (range1.first.t < range2.first.t) {
+                        if (range2.first.t < range1.second.t) {
+                            res = range2.first;
+                            break;
+                        }
+                    } else {
+                        if (range1.first.t < range2.second.t) {
+                            res = range1.first;
+                            break;
+                        }
+                    }
+                    return false;
+                } else if (range1.first.hit && !range2.first.hit) {
+                    if (!range2.second.hit) return false;
+                    if (range1.first.t < range2.second.t && range2.second.t < range1.second.t) {
+                        res = range1.first;
+                        break;
+                    }
+                    return false;
+                } else if (!range1.first.hit && range2.first.hit) {
+                    if (!range1.second.hit) return false;
+                    if (range2.first.t < range1.second.t && range1.second.t < range2.second.t) {
+                        res = range2.first;
+                        break;
+                    }
+                    return false;
+                }
+                if (!range1.first.hit && !range2.first.hit) {
+                    if (!range1.second.hit || !range2.second.hit) {
+                        return false;
+                    }
+                    res = range1.second.t > range2.second.t ? range1.second : range2.second;
+                    break;
+                }
+                break;
+            case BoolOp::Difference:
+                if (!range1.first.hit && !range1.second.hit) {
+                    return false;
+                }
+                if (!range2.first.hit && !range2.second.hit) {
+                    if (range1.second.hit) {
+                        res = range1.second;
+                        break;
+                    } else {
+                        return false;
+                    }
+                }
+                if (range2.first.hit && !range2.second.hit && range1.first.hit && range1.second.hit) {
+                    if (range2.first.t <= range1.first.t) {
+                        res = range1.second;
+                        break;
+                    }
+                }
+                if (range1.second.hit && range2.second.hit) {
+                    if (range1.first.hit) {
+                        if (range2.first.hit) {
+                            // case of all 4 intersections.
+                            if (range1.first.t <= range2.first.t) {
+                                if (range2.first.t < range1.second.t && range1.second.t < range2.second.t) {
+                                    ray = range2.first;
+                                    break;
+                                } else if (range1.second.t < range2.first.t && range2.first.t < range2.second.t) {
+                                    res = range1.second;
+                                    break;
+                                } else if (range2.first.t < range2.second.t && range2.second.t < range1.second.t) {
+                                    res = range1.second;
+                                    break;
+                                } else {
+                                    return false;
+                                }
+                            } else {
+                                if (range1.first.t < range2.second.t  && range2.second.t < range1.second.t) {
+                                    res = range1.second;
+                                    break;
+                                } else if (range2.second.t < range1.first.t && range1.first.t < range1.second.t) {
+                                    res = range1.second;
+                                    break;
+                                }
+                                return false;
+                            }
+                        } else {
+                            res = range1.second;
+                            break;
+                        }
+                    } else {
+                        if (range2.first.hit) {
+                            if (range2.first.t < range1.second.t) {
+                                res = range2.first;
+                                break;
+                            }
+                        } else {
+                            if (range2.second.t < range1.second.t) {
+                                res = range1.second;
+                                break;
+                            }
+                        }
+                    }
+                }
+                return false;
+            default:
+                break;
+        }
+        if (res.hit) {
+            if (ray.hit && ray.t < res.t) {
+                return false;
+            }
+            ray = res;
+            return true;
+        }
+        return false;
     }
 }

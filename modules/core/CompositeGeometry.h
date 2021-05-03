@@ -18,9 +18,10 @@ namespace rt {
          * @param s2 Second solid in the composite geometry.
          * @param operationType The type of operation this composite will be performing.
          * @param maxDepth The max depth of the BSP tree of the solids. Only used if BSP support is enabled.
-         * @param maxDepth The max number of primitives in the leaf nodes of the BSP tree of the solids. Only used if BSP support is enabled.
+         * @param maxPrimitives The max number of primitives in the leaf nodes of the BSP tree of the solids. Only used if BSP support is enabled.
 		 * @todo what to do if the shader was already assigned to a solid?
-         * @todo does it makes sense to construct the trees on object construction?
+         * @todo does it makes sense         * @todo does it makes sense to construct the trees on object construction?
+ to construct the trees on object construction?
 		 */
         DllExport explicit CCompositeGeometry(const CSolid &s1, const CSolid &s2, BoolOp operationType,
                                               int maxDepth = 3, int maxPrimitives = 20);
@@ -28,6 +29,7 @@ namespace rt {
         DllExport virtual ~CCompositeGeometry(void) = default;
 
         DllExport virtual bool intersect(Ray &ray) const override;
+        DllExport virtual bool intersect_furthest(Ray &ray) const override;
 
         DllExport virtual bool if_intersect(const Ray &ray) const override;
 
@@ -47,7 +49,7 @@ namespace rt {
         Vec3f m_origin;           ///< Origin/Pivot of the geometry.
         BoolOp m_operationType;    ///< Type of operation.
         CBoundingBox m_boundingBox;        ///< Bounding box of this composite geometry.
-#ifdef ENABLE_BSP
+#ifdef ENABLE_CSG_OPTIM
         std::unique_ptr<CBSPTree>		m_pBSPTree1		= nullptr;	///< Pointer to the spatial index structure for left geometry
         std::unique_ptr<CBSPTree>		m_pBSPTree2		= nullptr;	///< Pointer to the spatial index structure for right geometry
 #endif
