@@ -36,6 +36,9 @@ namespace rt {
 		 * @retval false Otherwise
 		 */
 		DllExport virtual bool				intersect(Ray& ray) const = 0;
+
+        DllExport virtual bool				intersect_furthest(Ray& ray) const = 0;
+
 		/**
 		 * @brief Checks for intersection between ray \b ray and the primitive
 		 * @details This function does not modify argeument \b ray and is used just to check if there is an intersection.
