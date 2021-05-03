@@ -1,3 +1,4 @@
+#include <macroses.h>
 #include "BSPNode.h"
 #include "Ray.h"
 
@@ -39,23 +40,9 @@ namespace rt {
             // main difference between the two functions resides here.
             // instead of looking for the closest intersection
             // we look for the furthest intersection in the leaf node.
-            bool hasIntersection = false;
-            auto mainCopy = ray;
-            Ray range = ray;
-            range.t = -Infty;
-            for (const auto &prim : m_vpPrims) {
-                Ray r = mainCopy;
-                if (prim->intersect(r)) {
-                    if (r.t > range.t) {
-                        range = r;
-                    }
-                    hasIntersection = true;
-                }
-            }
-            if (range.t > -Infty) {
-                ray = range;
-            }
-            return (hasIntersection && ray.t < t1 + Epsilon);
+            for (auto& pPrim : m_vpPrims)
+                pPrim->intersect_furthest(ray);
+            return (ray.hit && ray.t < t1 + Epsilon);
         }
         else {
             // distance from ray origin to the split plane of the current volume (may be negative)
