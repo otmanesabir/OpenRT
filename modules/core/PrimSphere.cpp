@@ -50,7 +50,12 @@ namespace rt {
 				return false;
 		}
 
-		ray.t = t0 > Epsilon ? t0 : t1;
+        Ray temp = ray;
+        temp.t = t0 > Epsilon ? t0 : t1;
+        if (this->getNormal(temp).dot(temp.dir) > 0) {
+            return false;
+        }
+		ray = temp;
 		ray.hit = shared_from_this();
 		return true;
 	}
@@ -91,5 +96,63 @@ namespace rt {
 	{ 
 		return CBoundingBox(m_origin - Vec3f::all(m_radius), m_origin + Vec3f::all(m_radius)); 
 	}
+
+    bool CPrimSphere::intersect_furthest(Ray &ray) const {
+        if (ray.t >= Infty) {
+            ray.t = -ray.t;
+        }
+        double r2 = static_cast<double>(m_radius) * static_cast<double>(m_radius);
+#if 1
+        // geometrical derivation
+        Vec3f L = m_origin - ray.org;
+
+        double tb = static_cast<double>(L.dot(ray.dir));
+        if (tb > -Epsilon && tb < Epsilon)	// if tb \in (-Epsilon; Epsilon)
+            return false;
+
+        double h2 = static_cast<double>(L.dot(L)) - tb * tb;
+        if (h2 > r2)					// no intersection
+            return false;
+
+        double delta = sqrt(r2 - h2);
+        double t0 = tb - delta;
+        double t1 = tb + delta;
+#else
+        // analytical derivation, numerically not very stable, but simple
+		// --> find roots of f(t) = ((R+tD)-C)^2 - r^2
+		// f(t) = (R-C)^2 + 2(R-C)(tD) + (tD)^2 -r^2
+		// --> f(t) = [D^2] t^2 + [2D(R-C)] t + [(R-C)^2 - r^2]
+		Vec3f diff = ray.org - m_origin;
+		double a = 1; // static_cast<double>(ray.dir.dot(ray.dir));	// must be equal to 1, since ray.dir must be normalized
+		double b = 2 * static_cast<double>(ray.dir.dot(diff));
+		double c = static_cast<double>(diff.dot(diff)) - r2;
+
+		// use 'abc'-formula for finding root t_1,2 = (-b +/- sqrt(b^2-4ac))/(2a)
+		double inRoot = b * b - 4 * a * c;
+		if (inRoot < 0)
+			return false;
+		double root = sqrt(inRoot);
+		double t0 = (-b - root) / (2 * a);
+		double t1 = (-b + root) / (2 * a);
+#endif
+        RT_ASSERT(t0 <= t1);
+
+        if (t0 < ray.t) return false;
+
+        if (t0 <= Epsilon) {
+            t0 = 0;
+            if (t1 < Epsilon || t1 < ray.t)
+                return false;
+        }
+
+        Ray temp = ray;
+        temp.t = t1 > Epsilon ? t1 : t0;
+        if (this->getNormal(temp).dot(temp.dir) <= 0) {
+            return false;
+        }
+        ray = temp;
+        ray.hit = shared_from_this();
+        return true;
+    }
 }
 
