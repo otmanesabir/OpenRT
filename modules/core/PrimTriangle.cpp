@@ -7,9 +7,16 @@ namespace rt {
 	{
 		auto t = MoellerTrumbore(ray);
 		if (t) {
-			ray.t = t.value().val[0];
-			ray.u = t.value().val[1];
-			ray.v = t.value().val[2];
+		    Ray temp = ray;
+			temp.t = t.value().val[0];
+            if (ray.t <= temp.t || temp.t < Epsilon)
+                return false;
+			temp.u = t.value().val[1];
+			temp.v = t.value().val[2];
+			if (this->getNormal(temp).dot(temp.dir) >= 0) {
+			    return false;
+			}
+			ray = temp;
 			ray.hit = shared_from_this();
 			return true;
 		}
@@ -86,10 +93,31 @@ namespace rt {
 
 		float t = m_edge2.dot(qvec);
 		t *= inv_det;
-		if (ray.t <= t || t < Epsilon)
-			return std::nullopt;
 
 		return Vec3f(t, lambda, mue);
 	}
+
+    bool CPrimTriangle::intersect_furthest(Ray &ray) const {
+	    if (ray.t >= Infty) {
+	        ray.t = -ray.t;
+	    }
+        auto t = MoellerTrumbore(ray);
+        if (t) {
+            Ray temp = ray;
+            temp.t = t.value().val[0];
+            if (ray.t >= temp.t || temp.t < Epsilon)
+                return false;
+            temp.u = t.value().val[1];
+            temp.v = t.value().val[2];
+            if (this->getNormal(temp).dot(temp.dir) < 0) {
+                return false;
+            }
+            ray = temp;
+            ray.hit = shared_from_this();
+            return true;
+        }
+        else
+            return false;
+    }
 }
 
